@@ -1,0 +1,6 @@
+{
+  "name": "BlueKon - Unified Cloud & Infrastructure Platform",
+  "description": "BlueKon connects, orchestrates, and observes distributed infrastructure with real-time telemetry, automated pipelines, and zero-agent mesh connectivity.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
