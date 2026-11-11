@@ -1,19 +1,70 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  LogOut, Server, Activity, ShieldCheck, Zap, Cpu, RefreshCw, 
-  Terminal, Globe, ArrowUpRight, CheckCircle2, UserCheck
+  LogOut, Server, Activity, UserCheck, 
+  HardDrive, FileText, Users, Search, X 
 } from 'lucide-react';
 import { signOut, User } from 'firebase/auth';
-import { auth } from '../firebase';
+import { 
+  collection, doc, setDoc, getDoc, serverTimestamp, 
+  onSnapshot 
+} from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import { MyFilesSection } from './dashboard/MyFilesSection';
+import { MyNotesSection } from './dashboard/MyNotesSection';
+import { TeamMembersSection } from './dashboard/TeamMembersSection';
 
 interface DashboardProps {
-  user: User | null;
+  user: User;
   onLogout: () => void;
 }
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'clusters' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'files' | 'notes' | 'team'>('files');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // Live item counts
+  const [fileCount, setFileCount] = useState<number>(0);
+  const [noteCount, setNoteCount] = useState<number>(0);
+  const [memberCount, setMemberCount] = useState<number>(0);
+
+  // Ensure user profile document exists under users/{uid}
+  useEffect(() => {
+    if (!user?.uid) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    getDoc(userDocRef).then((snap) => {
+      if (!snap.exists()) {
+        setDoc(userDocRef, {
+          displayName: user.displayName || user.email?.split('@')[0] || 'Cloud Engineer',
+          email: user.email || '',
+          plan: 'Developer Free',
+          createdAt: serverTimestamp(),
+        }, { merge: true }).catch((err) => console.error('Failed to init user doc:', err));
+      }
+    }).catch((err) => console.error('User doc fetch error:', err));
+  }, [user]);
+
+  // Real-time count listeners for tab badges
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubFiles = onSnapshot(collection(db, 'users', user.uid, 'files'), (snap) => {
+      setFileCount(snap.size);
+    }, (err) => console.error('files count error', err));
+
+    const unsubNotes = onSnapshot(collection(db, 'users', user.uid, 'notes'), (snap) => {
+      setNoteCount(snap.size);
+    }, (err) => console.error('notes count error', err));
+
+    const unsubMembers = onSnapshot(collection(db, 'users', user.uid, 'teamMembers'), (snap) => {
+      setMemberCount(snap.size);
+    }, (err) => console.error('members count error', err));
+
+    return () => {
+      unsubFiles();
+      unsubNotes();
+      unsubMembers();
+    };
+  }, [user]);
 
   const handleSignOut = async () => {
     setLoggingOut(true);
@@ -26,12 +77,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       setLoggingOut(false);
     }
   };
-
-  const clusters = [
-    { name: 'prod-mesh-us-east-1', provider: 'AWS EKS', nodes: 24, status: 'Healthy', latency: '4.2ms', rps: '1,420,000' },
-    { name: 'prod-mesh-eu-west-1', provider: 'GCP GKE', nodes: 18, status: 'Healthy', latency: '6.8ms', rps: '980,000' },
-    { name: 'staging-mesh-us-west-2', provider: 'Bare Metal', nodes: 8, status: 'Healthy', latency: '12.1ms', rps: '124,000' },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -55,7 +100,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300 font-mono bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800">
               <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="truncate max-w-[200px]">{user?.email || 'Authenticated User'}</span>
+              <span className="truncate max-w-[200px]">{user.email || 'Authenticated User'}</span>
             </div>
 
             <button
@@ -68,121 +113,119 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </button>
           </div>
         </div>
+
+        {/* Dashboard Navigation Tabs & Real-Time Search Bar */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3 py-2.5">
+          {/* Navigation Tabs (My Files, My Notes, Team Members) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+            <button
+              onClick={() => setActiveTab('files')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'files'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <HardDrive className="w-3.5 h-3.5" />
+              <span>My Files</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                activeTab === 'files' ? 'bg-blue-800 text-white' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {fileCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('notes')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'notes'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>My Notes</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                activeTab === 'notes' ? 'bg-blue-800 text-white' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {noteCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'team'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Team Members</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                activeTab === 'team' ? 'bg-blue-800 text-white' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {memberCount}
+              </span>
+            </button>
+          </div>
+
+          {/* Real-Time Search Bar */}
+          <div className="relative w-full md:w-80">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                activeTab === 'files'
+                  ? 'Search files and folders...'
+                  : activeTab === 'notes'
+                  ? 'Search notes by title or text...'
+                  : 'Search team by name or role...'
+              }
+              className="w-full pl-8 pr-8 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors font-mono"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-white rounded-md transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
       </header>
 
       {/* Main Dashboard Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Welcome Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-slate-900 border border-slate-800 rounded-2xl">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              Infrastructure Control Plane
-            </h1>
-            <p className="text-sm text-slate-400 mt-1">
-              Signed in as <span className="text-blue-400 font-mono">{user?.email}</span> via Firebase Authentication.
-            </p>
+        {/* 1) My Files Section */}
+        {activeTab === 'files' && (
+          <div className="animate-fadeIn">
+            <MyFilesSection userId={user.uid} searchQuery={searchQuery} />
           </div>
+        )}
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1.5 rounded-lg">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>All 3 Clusters Synchronized</span>
-            </div>
+        {/* 2) My Notes Section */}
+        {activeTab === 'notes' && (
+          <div className="animate-fadeIn">
+            <MyNotesSection userId={user.uid} searchQuery={searchQuery} />
           </div>
-        </div>
+        )}
 
-        {/* Real-time KPI Metric Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
-            <div className="text-xs text-slate-400 font-mono">Aggregated Throughput</div>
-            <div className="text-2xl font-bold font-mono text-white mt-1 tabular-nums">
-              2,524,000 <span className="text-xs text-slate-400 font-normal">req/s</span>
-            </div>
-            <div className="text-[11px] text-emerald-400 mt-2 font-mono">
-              100% nominal traffic
-            </div>
+        {/* 3) Team Members Section */}
+        {activeTab === 'team' && (
+          <div className="animate-fadeIn">
+            <TeamMembersSection userId={user.uid} searchQuery={searchQuery} />
           </div>
-
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
-            <div className="text-xs text-slate-400 font-mono">Global P99 Latency</div>
-            <div className="text-2xl font-bold font-mono text-blue-400 mt-1 tabular-nums">
-              8.4 ms
-            </div>
-            <div className="text-[11px] text-slate-400 mt-2 font-mono">
-              -12% vs last 24h
-            </div>
-          </div>
-
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
-            <div className="text-xs text-slate-400 font-mono">Active eBPF Hooks</div>
-            <div className="text-2xl font-bold font-mono text-white mt-1 tabular-nums">
-              142 probes
-            </div>
-            <div className="text-[11px] text-emerald-400 mt-2 font-mono">
-              0.03% kernel CPU load
-            </div>
-          </div>
-
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
-            <div className="text-xs text-slate-400 font-mono">Security Auth Mode</div>
-            <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
-              mTLS 1.3
-            </div>
-            <div className="text-[11px] text-slate-400 mt-2 font-mono">
-              SPIFFE/SPIRE Enforced
-            </div>
-          </div>
-        </div>
-
-        {/* Connected Clusters */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-semibold text-white">Active Production Clusters</h2>
-              <p className="text-xs text-slate-400">Zero-agent mesh connectivity across multi-cloud regions</p>
-            </div>
-            <span className="text-xs text-slate-400 font-mono">3 / 3 Online</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
-                  <th className="py-2.5 px-3">Cluster ID</th>
-                  <th className="py-2.5 px-3">Environment</th>
-                  <th className="py-2.5 px-3">Nodes</th>
-                  <th className="py-2.5 px-3">P99 Latency</th>
-                  <th className="py-2.5 px-3">RPS</th>
-                  <th className="py-2.5 px-3 text-right">Mesh Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {clusters.map((c, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-3 font-semibold text-white flex items-center gap-2">
-                      <Server className="w-3.5 h-3.5 text-blue-400" />
-                      {c.name}
-                    </td>
-                    <td className="py-3 px-3 text-slate-300">{c.provider}</td>
-                    <td className="py-3 px-3 text-slate-300">{c.nodes} pods</td>
-                    <td className="py-3 px-3 text-emerald-400">{c.latency}</td>
-                    <td className="py-3 px-3 text-slate-300">{c.rps}</td>
-                    <td className="py-3 px-3 text-right">
-                      <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded text-[11px]">
-                        {c.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
 
         {/* Quick Help & Session Note */}
         <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
-            Authenticated with Firebase Auth ({auth.currentUser?.email}). No profile or storage data is persisted.
+            Authenticated with Firebase Auth as <span className="text-slate-200 font-mono">{user.email}</span>. Data is stored securely in Firestore under <span className="font-mono text-blue-400">users/{user.uid}</span>.
           </div>
           <button
             onClick={handleSignOut}

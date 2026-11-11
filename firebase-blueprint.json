@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account document",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "plan": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "Folder container for user files",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "File": {
+      "title": "File",
+      "description": "Metadata for a stored file",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "folderId": { "type": "string" },
+        "size": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "Personal developer or system note",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "createdAt"]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "Team member in user's organization",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Authenticated user's profile and plan info"
+    },
+    "/users/{uid}/folders/{folderId}": {
+      "schema": "Folder",
+      "description": "User's file folders"
+    },
+    "/users/{uid}/files/{fileId}": {
+      "schema": "File",
+      "description": "User's uploaded file metadata"
+    },
+    "/users/{uid}/notes/{noteId}": {
+      "schema": "Note",
+      "description": "User's personal notes"
+    },
+    "/users/{uid}/teamMembers/{memberId}": {
+      "schema": "TeamMember",
+      "description": "User's team members"
+    }
+  }
+}
